@@ -15,3 +15,8 @@ wheels/
 # Generated data (vector DB + filing registry)
 data/chroma/
 data/registry.json
+
+# Editor settings
+.vscode/
+.idea/
+.DS_Store

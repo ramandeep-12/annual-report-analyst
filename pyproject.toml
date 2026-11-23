@@ -1,6 +1,6 @@
 [project]
 name = "rag"
-version = "0.1.0"
+version = "0.2.0"
 description = "RAG analyst over SEC 10-K filings with on-demand ingestion and cited answers"
 readme = "README.md"
 authors = [
@@ -11,13 +11,8 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "chromadb>=1.0",
     "fastapi>=0.115",
-    "langchain>=1.5.2",
-    "langchain-community>=0.4.2",
-    "langchain-core>=1.8.4",
     "langchain-text-splitters>=1.0",
     "openai>=3.57.0",
-    "pymupdf>=2.1",
-    "pypdf>=7.1.1",
     "python-dotenv>=1.0",
     "requests>=2.32",
     "uvicorn>=0.30",
@@ -29,3 +24,20 @@ rag = "rag.cli:main"
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # line length is handled by `ruff format`

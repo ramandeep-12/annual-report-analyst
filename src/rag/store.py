@@ -3,7 +3,8 @@
 import json
 import threading
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -25,16 +26,17 @@ class Hit:
 
 
 class FilingStore:
-    def __init__(self):
-        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        client = chromadb.PersistentClient(path=str(config.DATA_DIR / "chroma"))
-        # Chroma's built-in local model (all-MiniLM-L6-v2): free, no API key, no PyTorch
+    def __init__(self, data_dir: Path | None = None, embedding_function=None):
+        data_dir = data_dir or config.DATA_DIR
+        data_dir.mkdir(parents=True, exist_ok=True)
+        client = chromadb.PersistentClient(path=str(data_dir / "chroma"))
         self.collection = client.get_or_create_collection(
             "filings",
-            embedding_function=embedding_functions.DefaultEmbeddingFunction(),
+            # Default: Chroma's built-in local model (all-MiniLM-L6-v2): free, no API key
+            embedding_function=embedding_function or embedding_functions.DefaultEmbeddingFunction(),
             metadata={"hnsw:space": "cosine"},
         )
-        self._registry_path = config.DATA_DIR / "registry.json"
+        self._registry_path = data_dir / "registry.json"
         self._lock = threading.Lock()
 
     # ---------- registry: which filings are already embedded ----------
@@ -59,7 +61,7 @@ class FilingStore:
     def mark_checked(self, ticker: str) -> None:
         with self._lock:
             registry = self._read_registry()
-            registry["checked"][ticker.upper()] = datetime.now(timezone.utc).isoformat()
+            registry["checked"][ticker.upper()] = datetime.now(UTC).isoformat()
             self._write_registry(registry)
 
     def filings(self, ticker: str | None = None) -> list[dict]:
@@ -116,6 +118,6 @@ class FilingStore:
                 score=1 - dist,
             )
             for doc, meta, dist in zip(
-                result["documents"][0], result["metadatas"][0], result["distances"][0]
+                result["documents"][0], result["metadatas"][0], result["distances"][0], strict=True
             )
         ]

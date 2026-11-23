@@ -20,9 +20,17 @@ class UnknownTickerError(ValueError):
 
 # Brand names people search for that differ from the SEC's official company name
 ALIASES = {
-    "google": "GOOGL", "youtube": "GOOGL", "facebook": "META", "instagram": "META",
-    "whatsapp": "META", "coke": "KO", "chase": "JPM", "jp morgan": "JPM",
-    "walmart": "WMT", "costco": "COST", "home depot": "HD",
+    "google": "GOOGL",
+    "youtube": "GOOGL",
+    "facebook": "META",
+    "instagram": "META",
+    "whatsapp": "META",
+    "coke": "KO",
+    "chase": "JPM",
+    "jp morgan": "JPM",
+    "walmart": "WMT",
+    "costco": "COST",
+    "home depot": "HD",
 }
 
 
@@ -104,7 +112,7 @@ class SECClient:
         for alias, ticker in ALIASES.items():
             if ticker in self._tickers and alias.startswith(q) and len(q) >= 3:
                 ranked.append((0, -1, ticker, self._tickers[ticker][1]))
-        for pos, (ticker, cik, name) in enumerate(self._companies):
+        for pos, (ticker, _cik, name) in enumerate(self._companies):
             t, n = ticker.lower(), _normalize(name)
             if t == q:
                 rank = 0

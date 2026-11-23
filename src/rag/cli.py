@@ -1,19 +1,20 @@
 """Command line interface.
 
-    uv run rag ingest AAPL MSFT        # pre-load companies
-    uv run rag ask AAPL "What are the main risk factors?"
-    uv run rag list
+uv run rag ingest AAPL MSFT        # pre-load companies
+uv run rag ask AAPL "What are the main risk factors?"
+uv run rag list
 """
 
 import argparse
 import logging
+import sys
 
 from openai import OpenAI
 
 from rag import config
 from rag.answer import answer_question
 from rag.ingest import ensure_company
-from rag.sec_client import SECClient
+from rag.sec_client import SECClient, UnknownTickerError
 from rag.store import FilingStore
 
 
@@ -33,6 +34,8 @@ def main() -> None:
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    for noisy in ("httpx", "httpx2", "openai", "chromadb"):  # hide per-request HTTP logs
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     store = FilingStore()
 
     if args.command == "list":
@@ -41,6 +44,13 @@ def main() -> None:
         return
 
     sec = SECClient(config.sec_user_agent())
+    try:
+        _run(args, store, sec)
+    except UnknownTickerError as e:
+        sys.exit(f"{e}. Use the company's US stock ticker, e.g. AAPL for Apple.")
+
+
+def _run(args: argparse.Namespace, store: FilingStore, sec: SECClient) -> None:
     if args.command == "ingest":
         for ticker in args.tickers:
             new = ensure_company(store, sec, ticker)

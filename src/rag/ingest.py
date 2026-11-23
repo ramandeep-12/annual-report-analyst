@@ -6,7 +6,7 @@ After that, every user gets answers straight from the store (fast).
 
 import logging
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from rag import config
 from rag.parsing import chunk_filing
@@ -34,7 +34,7 @@ def ensure_company(store: FilingStore, sec: SECClient, ticker: str) -> list[Fili
     with _lock_for(ticker):
         checked = store.last_checked(ticker)
         fresh = timedelta(days=config.REFRESH_AFTER_DAYS)
-        if checked and datetime.now(timezone.utc) - checked < fresh:
+        if checked and datetime.now(UTC) - checked < fresh:
             return []
 
         new = []

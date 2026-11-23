@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -18,14 +18,26 @@ from pydantic import BaseModel, Field
 from rag import config
 from rag.answer import answer_question, retrieve, stream_answer
 from rag.ingest import ensure_company
+from rag.limits import RateLimiter
 from rag.sec_client import SECClient, UnknownTickerError, pretty_name
 from rag.store import FilingStore, Hit
 
 logging.basicConfig(level=logging.INFO)
+for _noisy in ("httpx", "httpx2", "openai"):  # hide per-request HTTP logs
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 app = FastAPI(title="10-K Analyst", version="0.2.0")
 
 STATIC_DIR = Path(__file__).parent / "static"
+limiter = RateLimiter(config.RATE_LIMIT_PER_HOUR, config.DAILY_QUESTION_LIMIT)
+
+
+def _enforce_limits(request: Request) -> None:
+    # Behind a hosting proxy the visitor's address is in X-Forwarded-For
+    forwarded = request.headers.get("x-forwarded-for", "")
+    visitor = forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+    if message := limiter.check(visitor):
+        raise HTTPException(status_code=429, detail=message)
 
 
 @lru_cache
@@ -99,8 +111,22 @@ def health() -> dict:
 
 # Shown in the company picker before the user types anything
 POPULAR_TICKERS = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "NFLX",
-    "JPM", "V", "WMT", "KO", "NKE", "DIS", "SBUX", "MCD",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "TSLA",
+    "NFLX",
+    "JPM",
+    "V",
+    "WMT",
+    "KO",
+    "NKE",
+    "DIS",
+    "SBUX",
+    "MCD",
 ]
 
 
@@ -127,13 +153,14 @@ def filings(ticker: str | None = None) -> list[dict]:
 
 
 @app.post("/ask")
-def ask(req: AskRequest) -> AskResponse:
+def ask(req: AskRequest, request: Request) -> AskResponse:
     """Ask a question and get the whole answer at once."""
+    _enforce_limits(request)
     # Sync endpoint: FastAPI runs it in a thread pool, so slow ingestion doesn't block others
     try:
         ensure_company(store(), sec(), req.ticker)
     except UnknownTickerError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
     history = [t.model_dump() for t in req.history]
     result = answer_question(store(), llm(), req.question, req.ticker, req.years, history)
@@ -145,7 +172,7 @@ def _event(type_: str, **data) -> str:
 
 
 @app.post("/chat")
-def chat(req: AskRequest) -> StreamingResponse:
+def chat(req: AskRequest, request: Request) -> StreamingResponse:
     """Same as /ask, but streams the answer as it's written.
 
     Response is newline-delimited JSON events:
@@ -155,6 +182,7 @@ def chat(req: AskRequest) -> StreamingResponse:
       {"type": "error",   "text": "..."}        something went wrong
       {"type": "done"}
     """
+    _enforce_limits(request)
     ticker = req.ticker.upper()
     history = [t.model_dump() for t in req.history]
 
