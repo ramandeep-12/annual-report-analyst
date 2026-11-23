@@ -16,8 +16,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 # volume when deployed, otherwise data is lost on every restart.
 DATA_DIR = Path(os.environ.get("DATA_DIR", PROJECT_ROOT / "data"))
 
-# Claude model used to write answers
-LLM_MODEL = os.environ.get("LLM_MODEL", "claude-opus-5-5")
+# OpenAI model used to write answers
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-5.4-mini")
 
 # Retrieval / chunking
 CHUNK_SIZE = 1500

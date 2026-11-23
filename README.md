@@ -13,7 +13,7 @@ question + ticker
 ensure_company ──(not stored yet?)──► SEC EDGAR API ─► parse HTML ─► split by 10-K Item ─► embed ─► Chroma
       │
       ▼
-vector search (filtered by ticker / year) ─► top-k excerpts ─► Claude ─► answer with [n] citations
+vector search (filtered by ticker / year) ─► top-k excerpts ─► OpenAI ─► answer with [n] citations
 ```
 
 | Module | Role |
@@ -22,15 +22,16 @@ vector search (filtered by ticker / year) ─► top-k excerpts ─► Claude �
 | `src/rag/parsing.py` | HTML → clean text (tables kept as rows), split into 10-K sections, chunk |
 | `src/rag/store.py` | Chroma vector store + registry of ingested filings |
 | `src/rag/ingest.py` | On-demand ingestion with per-ticker locking and weekly refresh |
-| `src/rag/answer.py` | Retrieval + prompt + Claude call |
-| `src/rag/api.py` | FastAPI app (`/ask`, `/filings`, `/health`) |
+| `src/rag/answer.py` | Retrieval + prompt + OpenAI call |
+| `src/rag/api.py` | FastAPI app: chat page (`/`), streaming `/chat`, `/ask`, `/filings`, `/health` |
+| `src/rag/static/index.html` | Chat UI: streaming answers, follow-ups, clickable citations, fiscal-year filter |
 | `src/rag/cli.py` | `rag ingest`, `rag ask`, `rag list` |
 
 ## Setup
 
 ```bash
 uv sync
-cp .env.example .env   # then fill in SEC_NAME, SEC_EMAIL, ANTHROPIC_API_KEY
+cp .env.example .env   # then fill in SEC_NAME, SEC_EMAIL, OPENAI_API_KEY
 ```
 
 ## Usage
@@ -41,7 +42,7 @@ uv run rag ingest AAPL MSFT
 uv run rag ask AAPL "What are Apple's main risk factors?"
 uv run rag ask TSLA "How did R&D spending change?" --years 2024 2025
 
-# API (docs at http://localhost:8000/docs)
+# Chat UI at http://127.0.0.1:8000  (raw API docs at /docs)
 uv run uvicorn rag.api:app --reload
 ```
 
@@ -49,7 +50,7 @@ uv run uvicorn rag.api:app --reload
 
 - [x] On-demand ingestion from SEC EDGAR
 - [x] Section-aware chunking and cited answers
-- [ ] Web UI
+- [x] Chat web UI with streaming answers and follow-up questions
 - [ ] Hybrid search (BM25 + vectors) and reranking
 - [ ] Evaluation set with SEC XBRL figures as ground truth
 - [ ] Multi-company comparison questions

@@ -8,7 +8,7 @@
 import argparse
 import logging
 
-import anthropic
+from openai import OpenAI
 
 from rag import config
 from rag.answer import answer_question
@@ -47,7 +47,7 @@ def main() -> None:
             print(f"{ticker.upper()}: {len(new)} new filing(s) ingested")
     elif args.command == "ask":
         ensure_company(store, sec, args.ticker)
-        result = answer_question(store, anthropic.Anthropic(), args.question, args.ticker, args.years)
+        result = answer_question(store, OpenAI(), args.question, args.ticker, args.years)
         print("\n" + result.text + "\n\nSources:")
         for i, h in enumerate(result.sources, start=1):
             print(f"  [{i}] {h.company} FY{h.fiscal_year} — {h.section}\n      {h.url}")

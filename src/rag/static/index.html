@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10-K Analyst</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232563eb'/><path d='M9 21V13M16 21V9M23 21v-6' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface-2: #f0f0ed;
+    --text: #1c1c1a;
+    --muted: #6b6b66;
+    --border: #e3e3de;
+    --accent: #2563eb;
+    --accent-soft: #e6eefe;
+    --accent-text: #ffffff;
+    --user-bubble: #1c1c1a;
+    --user-text: #ffffff;
+    --danger: #b42318;
+    --danger-soft: #fdecea;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131312; --surface: #1c1c1b; --surface-2: #262624; --text: #ececea;
+      --muted: #9a9a94; --border: #33332f; --accent: #6b9bff; --accent-soft: #1d2a47;
+      --accent-text: #0b1220; --user-bubble: #ececea; --user-text: #131312;
+      --danger: #ff8a80; --danger-soft: #3a1d1b; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #131312; --surface: #1c1c1b; --surface-2: #262624; --text: #ececea;
+    --muted: #9a9a94; --border: #33332f; --accent: #6b9bff; --accent-soft: #1d2a47;
+    --accent-text: #0b1220; --user-bubble: #ececea; --user-text: #131312;
+    --danger: #ff8a80; --danger-soft: #3a1d1b; --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  textarea:focus-visible, .picker-field input:focus-visible { outline: none; } /* wrapper shows focus */
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    border-bottom: 1px solid var(--border); background: var(--surface);
+    padding: 10px 16px;
+  }
+  .bar { max-width: 860px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; letter-spacing: -.01em; margin-right: auto; }
+  .brand svg { flex: none; }
+  .picker { position: relative; width: min(340px, 100%); }
+  .picker-field {
+    display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+  }
+  .picker-field:focus-within { border-color: var(--accent); background: var(--surface); }
+  .picker-field input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text);
+    font: 500 14px/1 inherit; padding: 9px 0; text-overflow: ellipsis;
+  }
+  .picker-field input:disabled { opacity: .6; }
+  .picker .chev { flex: none; }
+  #company-list {
+    position: absolute; z-index: 10; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px;
+    list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.14); max-height: min(420px, 60vh); overflow-y: auto;
+  }
+  #company-list .group { padding: 6px 8px 4px; font-size: 12px; color: var(--muted); }
+  #company-list .opt {
+    display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer;
+  }
+  #company-list .opt[aria-selected="true"] { background: var(--accent-soft); }
+  #company-list .opt .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #company-list .opt .tk { font: 600 12px var(--mono); color: var(--muted); }
+  #company-list .opt .ready { font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 7px; }
+  #company-list .none { padding: 10px 8px; color: var(--muted); font-size: 14px; }
+  .ghost {
+    border: 1px solid var(--border); background: transparent; border-radius: 8px;
+    padding: 6px 12px; font-size: 13px;
+  }
+  .ghost:hover { background: var(--surface-2); }
+
+  .years { max-width: 860px; margin: 8px auto 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  .years:empty { display: none; }
+  .years .label { color: var(--muted); margin-right: 2px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+    padding: 2px 10px; font-size: 13px;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+  /* ---------- conversation ---------- */
+  main { flex: 1; overflow-y: auto; padding: 24px 16px 8px; }
+  .thread { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  .empty { text-align: center; padding: 6vh 0 0; }
+  .empty h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 6px; }
+  .empty p { color: var(--muted); margin: 0 auto 22px; max-width: 520px; }
+  .suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; text-align: left; }
+  .suggestions button {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; text-align: left; box-shadow: var(--shadow); line-height: 1.4;
+  }
+  .suggestions button:hover { border-color: var(--accent); }
+
+  .msg-user { align-self: flex-end; max-width: 80%; }
+  .msg-user .bubble {
+    background: var(--user-bubble); color: var(--user-text); padding: 10px 14px;
+    border-radius: var(--radius) var(--radius) 4px var(--radius); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+
+  .msg-bot { display: flex; gap: 12px; align-items: flex-start; }
+  .avatar {
+    flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--accent);
+    display: grid; place-items: center; margin-top: 2px;
+  }
+  .bot-body { flex: 1; min-width: 0; }
+  .status { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border);
+    border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { background: var(--danger-soft); color: var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+
+  .answer { overflow-wrap: anywhere; }
+  .answer > :first-child { margin-top: 0; }
+  .answer > :last-child { margin-bottom: 0; }
+  .answer p, .answer ul, .answer ol { margin: 0 0 .75em; }
+  .answer ul, .answer ol { padding-left: 1.3em; }
+  .answer li { margin: .2em 0; }
+  .answer h1, .answer h2, .answer h3 { font-size: 1.05em; margin: 1em 0 .4em; }
+  .answer code { font-family: var(--mono); font-size: .9em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+  .answer .table-wrap { overflow-x: auto; margin: 0 0 .75em; }
+  .answer table { border-collapse: collapse; font-size: 14px; min-width: 60%; }
+  .answer th, .answer td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+  .answer th { background: var(--surface-2); font-weight: 600; }
+  .answer td:not(:first-child) { font-variant-numeric: tabular-nums; }
+  .cursor::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; margin-left: 1px; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .cite {
+    border: none; background: var(--accent-soft); color: var(--accent); font: 600 11px/1 var(--mono);
+    padding: 3px 5px; border-radius: 5px; vertical-align: 1px; margin: 0 1px;
+  }
+  .cite:hover { background: var(--accent); color: var(--accent-text); }
+
+  details.sources { margin-top: 12px; }
+  details.sources > summary {
+    cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+    user-select: none;
+  }
+  details.sources > summary::-webkit-details-marker { display: none; }
+  details.sources > summary::before { content: "▸"; transition: transform .15s; }
+  details.sources[open] > summary::before { transform: rotate(90deg); }
+  .source-list { display: grid; gap: 8px; margin-top: 10px; }
+  .source {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 10px 12px;
+    font-size: 13px; transition: border-color .2s, box-shadow .2s;
+  }
+  .source.flash { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .source-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .source-head .n { font: 600 11px var(--mono); color: var(--accent); background: var(--accent-soft); padding: 2px 5px; border-radius: 5px; }
+  .source-head a { color: var(--text); font-weight: 600; text-decoration: none; }
+  .source-head a:hover { text-decoration: underline; }
+  .source-head .fy { color: var(--muted); }
+  .excerpt { color: var(--muted); margin-top: 6px; white-space: pre-wrap; max-height: 7.5em; overflow: hidden; position: relative; }
+  .excerpt.open { max-height: none; }
+  .more { border: none; background: none; color: var(--accent); padding: 4px 0 0; font-size: 12px; }
+
+  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .actions button { border: none; background: none; color: var(--muted); font-size: 12px; padding: 2px 6px; border-radius: 6px; }
+  .actions button:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ---------- composer ---------- */
+  footer { padding: 8px 16px 16px; }
+  form.composer {
+    max-width: 860px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 8px 8px 8px 14px;
+    box-shadow: var(--shadow);
+  }
+  form.composer:focus-within { border-color: var(--accent); }
+  textarea {
+    flex: 1; border: none; outline: none; resize: none; background: transparent; color: var(--text);
+    font: inherit; padding: 6px 0; max-height: 180px; min-height: 24px;
+  }
+  .send {
+    flex: none; width: 36px; height: 36px; border-radius: 10px; border: none;
+    background: var(--accent); color: var(--accent-text); display: grid; place-items: center;
+  }
+  .send:disabled { opacity: .35; cursor: default; }
+  .hint { max-width: 860px; margin: 6px auto 0; color: var(--muted); font-size: 12px; text-align: center; }
+
+  @media (max-width: 560px) {
+    .brand span { display: none; }
+    .msg-user { max-width: 92%; }
+    .avatar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 21V13M16 21V9M23 21v-6" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+      <span>10-K Analyst</span>
+    </div>
+    <div class="picker" id="picker">
+      <div class="picker-field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="company" role="combobox" aria-label="Company" aria-expanded="false" aria-controls="company-list"
+               aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Search a company, e.g. Nike">
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+      <ul id="company-list" role="listbox" aria-label="Companies" hidden></ul>
+    </div>
+    <button class="ghost" id="new-chat" type="button">New chat</button>
+  </div>
+  <div class="years" id="years"></div>
+</header>
+
+<main id="scroller">
+  <div class="thread" id="thread"></div>
+</main>
+
+<footer>
+  <form class="composer" id="composer">
+    <textarea id="input" rows="1" placeholder="Ask about AAPL's annual reports…" aria-label="Your question"></textarea>
+    <button class="send" id="send" type="submit" aria-label="Send" disabled>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </button>
+  </form>
+  <div class="hint">Answers come only from the company's last three 10-K filings. Enter to send · Shift+Enter for a new line</div>
+</footer>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const thread = $("thread"), scroller = $("scroller"), input = $("input"), sendBtn = $("send");
+  const companyInput = $("company"), companyList = $("company-list"), yearsBar = $("years");
+
+  const SUGGESTIONS = [
+    "What are the company's main risk factors?",
+    "How did revenue and net income change over the last three years?",
+    "Summarize the business and its main products or segments.",
+    "What does management say about AI and competition?",
+  ];
+
+  let history = [];          // [{role, content}] sent with each question for follow-ups
+  let company = loadCompany(); // {ticker, name}
+  let ticker = company.ticker;
+  let years = [];            // selected fiscal years ([] = all)
+  let busy = false;
+  let controller = null;
+
+  // ---------- helpers ----------
+  function loadCompany() {
+    const fallback = { ticker: "AAPL", name: "Apple Inc." };
+    try {
+      const c = JSON.parse(localStorage.getItem("company"));
+      return c && c.ticker && c.name ? c : fallback;
+    } catch { return fallback; }
+  }
+  function saveCompany(c) { try { localStorage.setItem("company", JSON.stringify(c)); } catch {} }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function nearBottom() { return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120; }
+  function toBottom() { scroller.scrollTop = scroller.scrollHeight; }
+
+  function renderMarkdown(target, text) {
+    if (window.marked && window.DOMPurify) {
+      target.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: false }));
+      target.querySelectorAll("table").forEach((t) => {
+        const wrap = el("div", "table-wrap");
+        t.replaceWith(wrap); wrap.appendChild(t);
+      });
+    } else {
+      target.textContent = text;   // CDN unavailable: plain text still works
+      target.style.whiteSpace = "pre-wrap";
+    }
+  }
+
+  // Turn "[3]" in the rendered answer into clickable chips that point to source 3
+  function linkCitations(root, sourceCount, onCite) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest("code, pre") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const nodes = [];
+    while (walker.nextNode()) if (/\[\d+\]/.test(walker.currentNode.nodeValue)) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const frag = document.createDocumentFragment();
+      node.nodeValue.split(/(\[\d+\])/).forEach((part) => {
+        const m = part.match(/^\[(\d+)\]$/);
+        const n = m && Number(m[1]);
+        if (n && n <= sourceCount) {
+          const b = el("button", "cite", String(n));
+          b.type = "button";
+          b.title = `Show source ${n}`;
+          b.addEventListener("click", () => onCite(n));
+          frag.appendChild(b);
+        } else if (part) {
+          frag.appendChild(document.createTextNode(part));
+        }
+      });
+      node.replaceWith(frag);
+    }
+  }
+
+  // ---------- company + years ----------
+  async function refreshYears() {
+    try {
+      const rows = await (await fetch(`/filings?ticker=${encodeURIComponent(ticker)}`)).json();
+      renderYears(rows.map((r) => r.fiscal_year));
+    } catch { /* API not reachable; chat will report errors */ }
+  }
+
+  function renderYears(fys) {
+    yearsBar.innerHTML = "";
+    fys = [...new Set(fys)].sort((a, b) => b - a);
+    if (!fys.length) return;
+    yearsBar.appendChild(el("span", "label", "Fiscal years:"));
+    const make = (label, active, onClick) => {
+      const b = el("button", "chip", label);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(active));
+      b.addEventListener("click", onClick);
+      yearsBar.appendChild(b);
+    };
+    make("All", years.length === 0, () => { years = []; renderYears(fys); });
+    fys.forEach((y) => make(`FY${y}`, years.includes(y), () => {
+      years = years.includes(y) ? years.filter((v) => v !== y) : [...years, y];
+      if (years.length === fys.length) years = [];
+      renderYears(fys);
+    }));
+  }
+
+  // ---------- company picker (searchable dropdown) ----------
+  let options = [], active = -1, searchSeq = 0, searchTimer = 0;
+  const label = (c) => `${c.name} (${c.ticker})`;
+
+  function showSelected() { companyInput.value = label(company); }
+
+  function openList() {
+    companyList.hidden = false;
+    companyInput.setAttribute("aria-expanded", "true");
+  }
+  function closeList(restore = true) {
+    companyList.hidden = true;
+    companyInput.setAttribute("aria-expanded", "false");
+    companyInput.removeAttribute("aria-activedescendant");
+    if (restore) showSelected();
+  }
+
+  async function searchCompanies(q) {
+    const seq = ++searchSeq;
+    try {
+      const res = await fetch(`/companies?q=${encodeURIComponent(q)}`);
+      const rows = await res.json();
+      if (seq !== searchSeq) return;   // a newer search has started
+      renderOptions(rows, q);
+    } catch {
+      if (seq === searchSeq) renderOptions([], q, "Couldn't load companies. Is the server running?");
+    }
+  }
+
+  function renderOptions(rows, q, errorText) {
+    options = rows; active = rows.length ? 0 : -1;
+    companyList.innerHTML = "";
+    if (!q) companyList.appendChild(el("li", "group", "Popular companies"));
+    if (!rows.length) {
+      companyList.appendChild(el("li", "none", errorText || `No US-listed company matches “${q}”. Try the company's official name.`));
+    }
+    rows.forEach((c, i) => {
+      const li = el("li", "opt");
+      li.id = `opt-${i}`;
+      li.setAttribute("role", "option");
+      li.appendChild(el("span", "name", c.name));
+      if (c.indexed) {
+        const r = el("span", "ready", "ready"); r.title = "Filings already downloaded: answers are instant";
+        li.appendChild(r);
+      }
+      li.appendChild(el("span", "tk", c.ticker));
+      li.addEventListener("mousedown", (e) => e.preventDefault());   // keep focus in the input
+      li.addEventListener("click", () => chooseCompany(c));
+      li.addEventListener("mousemove", () => setActive(i));
+      companyList.appendChild(li);
+    });
+    setActive(active);
+    openList();
+  }
+
+  function setActive(i) {
+    active = i;
+    companyList.querySelectorAll(".opt").forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
+    const cur = $(`opt-${i}`);
+    if (cur) { companyInput.setAttribute("aria-activedescendant", cur.id); cur.scrollIntoView({ block: "nearest" }); }
+  }
+
+  function chooseCompany(c) {
+    closeList(false);
+    companyInput.blur();
+    const changed = c.ticker !== ticker;
+    company = { ticker: c.ticker, name: c.name };
+    ticker = c.ticker;
+    saveCompany(company);
+    showSelected();
+    if (changed) { years = []; renderYears([]); newChat(); refreshYears(); }
+    else input.focus();
+  }
+
+  companyInput.addEventListener("focus", () => { companyInput.select(); searchCompanies(""); });
+  companyInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const q = companyInput.value.trim();
+    searchTimer = setTimeout(() => searchCompanies(q), 150);
+  });
+  companyInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (companyList.hidden) { searchCompanies(companyInput.value.trim()); return; }
+      if (!options.length) return;
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((active + step + options.length) % options.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (options[active] && !companyList.hidden) chooseCompany(options[active]);
+    } else if (e.key === "Escape") {
+      closeList(); companyInput.blur();
+    }
+  });
+  companyInput.addEventListener("blur", () => setTimeout(() => {
+    if (document.activeElement !== companyInput) closeList();
+  }, 0));
+
+  // ---------- conversation ----------
+  function newChat() {
+    if (controller) controller.abort();
+    history = [];
+    thread.innerHTML = "";
+    input.placeholder = `Ask about ${company.name.replace(/\.$/, "")}…`;
+    const empty = el("div", "empty");
+    empty.appendChild(el("h1", null, `Ask anything about ${company.name}`));
+    empty.appendChild(el("p", null, "Answers come from the company's last three annual reports (10-K filings with the SEC), with numbered citations you can click to check. To switch company, search by name at the top."));
+    const grid = el("div", "suggestions");
+    SUGGESTIONS.forEach((q) => {
+      const b = el("button", null, q); b.type = "button";
+      b.addEventListener("click", () => ask(q));
+      grid.appendChild(b);
+    });
+    empty.appendChild(grid);
+    thread.appendChild(empty);
+    input.focus();
+  }
+  $("new-chat").addEventListener("click", newChat);
+
+  function addUserMessage(text) {
+    thread.querySelector(".empty")?.remove();
+    const wrap = el("div", "msg-user");
+    wrap.appendChild(el("div", "bubble", text));
+    thread.appendChild(wrap);
+  }
+
+  function addBotMessage() {
+    const wrap = el("div", "msg-bot");
+    const avatar = el("div", "avatar");
+    avatar.innerHTML = '<svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><path d="M9 21V13M16 21V9M23 21v-6" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>';
+    const body = el("div", "bot-body");
+    const status = el("div", "status");
+    status.appendChild(el("span", "spinner"));
+    const statusText = el("span", null, `Searching ${ticker}'s filings…`);
+    status.appendChild(statusText);
+    const answer = el("div", "answer");
+    body.append(status, answer);
+    wrap.append(avatar, body);
+    thread.appendChild(wrap);
+    return { body, status, statusText, answer };
+  }
+
+  function renderSources(body, sources) {
+    const details = el("details", "sources");
+    details.appendChild(el("summary", null, `${sources.length} sources`));
+    const list = el("div", "source-list");
+    const cards = {};
+    sources.forEach((s) => {
+      const card = el("div", "source");
+      const head = el("div", "source-head");
+      head.appendChild(el("span", "n", String(s.number)));
+      const a = el("a", null, s.section);
+      a.href = s.url; a.target = "_blank"; a.rel = "noopener";
+      head.appendChild(a);
+      head.appendChild(el("span", "fy", `${s.company} · FY${s.fiscal_year}`));
+      const ex = el("div", "excerpt", s.excerpt + (s.excerpt.length >= 600 ? "…" : ""));
+      const more = el("button", "more", "Show more");
+      more.type = "button";
+      more.addEventListener("click", () => {
+        ex.classList.toggle("open");
+        more.textContent = ex.classList.contains("open") ? "Show less" : "Show more";
+      });
+      card.append(head, ex, more);
+      list.appendChild(card);
+      cards[s.number] = card;
+    });
+    details.appendChild(list);
+    body.appendChild(details);
+    return (n) => {
+      details.open = true;
+      const card = cards[n];
+      if (!card) return;
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+      setTimeout(() => card.classList.remove("flash"), 1600);
+    };
+  }
+
+  function addActions(body, text) {
+    const actions = el("div", "actions");
+    const copy = el("button", null, "Copy");
+    copy.type = "button";
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; }
+      catch { copy.textContent = "Couldn't copy"; }
+      setTimeout(() => (copy.textContent = "Copy"), 1500);
+    });
+    actions.appendChild(copy);
+    body.appendChild(actions);
+  }
+
+  function setBusy(v) {
+    busy = v;
+    sendBtn.disabled = v || !input.value.trim();
+    companyInput.disabled = v;
+  }
+
+  async function ask(question) {
+    question = question.trim();
+    if (!question || busy) return;
+    setBusy(true);
+    input.value = ""; autosize();
+
+    addUserMessage(question);
+    const ui = addBotMessage();
+    toBottom();
+
+    let text = "", sources = [], failed = false, frame = 0, onCite = () => {};
+    const paint = () => {
+      frame = 0;
+      const stick = nearBottom();
+      renderMarkdown(ui.answer, text);
+      ui.answer.classList.add("cursor");
+      if (stick) toBottom();
+    };
+
+    controller = new AbortController();
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, ticker, years: years.length ? years : null, history }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        const msg = detail?.detail?.[0]?.msg || detail?.detail || `Request failed (${res.status})`;
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          if (!line.trim()) continue;
+          const ev = JSON.parse(line);
+          if (ev.type === "status") {
+            ui.statusText.textContent = ev.text;
+          } else if (ev.type === "sources") {
+            sources = ev.sources;
+            ui.statusText.textContent = "Writing answer…";
+          } else if (ev.type === "delta") {
+            if (!text) ui.status.remove();
+            text += ev.text;
+            if (!frame) frame = requestAnimationFrame(paint);
+          } else if (ev.type === "error") {
+            failed = true;
+            ui.status.remove();
+            ui.body.appendChild(el("div", "error", ev.text));
+          }
+        }
+      }
+    } catch (err) {
+      failed = true;
+      ui.status.remove();
+      if (err.name !== "AbortError") ui.body.appendChild(el("div", "error", `Couldn't reach the server: ${err.message}`));
+    } finally {
+      if (frame) cancelAnimationFrame(frame);
+      ui.status.remove();
+      if (text) {
+        renderMarkdown(ui.answer, text);
+        if (sources.length) onCite = renderSources(ui.body, sources);
+        linkCitations(ui.answer, sources.length, (n) => onCite(n));
+        addActions(ui.body, text);
+      }
+      ui.answer.classList.remove("cursor");
+      if (text && !failed) {
+        history.push({ role: "user", content: question }, { role: "assistant", content: text });
+        history = history.slice(-40);
+      }
+      controller = null;
+      setBusy(false);
+      input.focus();
+      refreshYears();   // a new company may have just been indexed
+    }
+  }
+
+  // ---------- composer ----------
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+    sendBtn.disabled = busy || !input.value.trim();
+  }
+  input.addEventListener("input", autosize);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
+  });
+  $("composer").addEventListener("submit", (e) => { e.preventDefault(); ask(input.value); });
+
+  // ---------- start ----------
+  showSelected();
+  newChat();
+  refreshYears();
+})();
+</script>
+</body>
+</html>

@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "anthropic>=1.0",
     "beautifulsoup4>=4.15.0",
     "chromadb>=1.0",
     "fastapi>=0.115",
@@ -16,6 +15,7 @@ dependencies = [
     "langchain-community>=0.4.2",
     "langchain-core>=1.8.4",
     "langchain-text-splitters>=1.0",
+    "openai>=3.57.0",
     "pymupdf>=2.1",
     "pypdf>=7.1.1",
     "python-dotenv>=1.0",

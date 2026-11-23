@@ -18,6 +18,25 @@ class UnknownTickerError(ValueError):
     pass
 
 
+# Brand names people search for that differ from the SEC's official company name
+ALIASES = {
+    "google": "GOOGL", "youtube": "GOOGL", "facebook": "META", "instagram": "META",
+    "whatsapp": "META", "coke": "KO", "chase": "JPM", "jp morgan": "JPM",
+    "walmart": "WMT", "costco": "COST", "home depot": "HD",
+}
+
+
+def _normalize(text: str) -> str:
+    """Lowercase and drop punctuation, so "coca-cola" matches "COCA COLA CO"."""
+    text = text.lower().replace("'", "").replace(".", "")
+    return " ".join(text.replace("-", " ").replace(",", " ").replace("&", " & ").split())
+
+
+def pretty_name(name: str) -> str:
+    """'MICROSOFT CORP' -> 'Microsoft Corp' (names already in mixed case are kept)."""
+    return name.title() if name.isupper() else name
+
+
 @dataclass(frozen=True)
 class Filing:
     ticker: str
@@ -44,6 +63,7 @@ class SECClient:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
         self._tickers: dict[str, tuple[int, str]] | None = None
+        self._companies: list[tuple[str, int, str]] = []  # (ticker, cik, name), SEC's order
         self._last_request = 0.0
 
     def _get(self, url: str) -> requests.Response:
@@ -56,15 +76,58 @@ class SECClient:
         resp.raise_for_status()
         return resp
 
+    def _load_tickers(self) -> dict[str, tuple[int, str]]:
+        if self._tickers is None:
+            rows = list(self._get(TICKERS_URL).json().values())
+            self._companies = [(r["ticker"].upper(), r["cik_str"], r["title"]) for r in rows]
+            self._tickers = {t: (cik, name) for t, cik, name in self._companies}
+        return self._tickers
+
     def lookup(self, ticker: str) -> tuple[int, str]:
         """Ticker -> (CIK number, company name)."""
-        if self._tickers is None:
-            rows = self._get(TICKERS_URL).json().values()
-            self._tickers = {r["ticker"].upper(): (r["cik_str"], r["title"]) for r in rows}
         try:
-            return self._tickers[ticker.upper()]
+            return self._load_tickers()[ticker.upper()]
         except KeyError:
             raise UnknownTickerError(f"Unknown ticker: {ticker}") from None
+
+    def search(self, query: str, limit: int = 8) -> list[tuple[str, str]]:
+        """Find companies by name or ticker -> [(ticker, name)], best matches first.
+
+        SEC lists companies roughly by size, so among equal matches bigger companies come first.
+        """
+        self._load_tickers()
+        q = _normalize(query)
+        if not q:
+            return []
+        ranked: list[tuple[int, int, str, str]] = []
+        seen_ciks: set[int] = set()
+        for alias, ticker in ALIASES.items():
+            if ticker in self._tickers and alias.startswith(q) and len(q) >= 3:
+                ranked.append((0, -1, ticker, self._tickers[ticker][1]))
+        for pos, (ticker, cik, name) in enumerate(self._companies):
+            t, n = ticker.lower(), _normalize(name)
+            if t == q:
+                rank = 0
+            elif n.startswith(q):
+                rank = 1
+            elif t.startswith(q):
+                rank = 2
+            elif f" {q}" in f" {n}":  # a word in the name starts with the query
+                rank = 3
+            else:
+                continue
+            ranked.append((rank, pos, ticker, name))
+        ranked.sort()
+        results = []
+        for rank, _, ticker, name in ranked:
+            cik = self._tickers[ticker][0]
+            if cik in seen_ciks and rank != 0:  # one row per company (e.g. GOOGL, not also GOOG)
+                continue
+            seen_ciks.add(cik)
+            results.append((ticker, pretty_name(name)))
+            if len(results) >= limit:
+                break
+        return results
 
     def latest_10ks(self, ticker: str, limit: int) -> list[Filing]:
         """Most recent 10-K filings for a company, newest first."""
